@@ -1,0 +1,138 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>ANAS CITY 3D</title>
+<style>
+html,body{margin:0;height:100%;overflow:hidden;background:#111;font-family:Arial,sans-serif}
+#game{width:100%;height:100%;display:block}
+#brand{position:fixed;top:12px;right:14px;color:#fff;font-weight:900;text-shadow:0 2px 5px #000;z-index:10}
+#hud{position:fixed;top:12px;left:12px;color:#fff;background:#0009;padding:10px 14px;border-radius:12px;z-index:10;font-weight:bold}
+#msg{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;color:#fff;font-size:20px;text-align:center;z-index:20;background:#111}
+#controls{position:fixed;left:18px;bottom:25px;width:160px;height:160px;z-index:12}
+.b{position:absolute;width:54px;height:54px;border:0;border-radius:50%;background:#ffffff55;color:white;font-size:23px;font-weight:bold}
+#u{left:53px;top:0}#l{left:0;top:53px}#d{left:53px;top:106px}#r{right:0;top:53px}
+#jump{position:fixed;right:25px;bottom:45px;width:70px;height:70px;border:0;border-radius:50%;background:#ffb300cc;color:#111;font-weight:bold;z-index:12}
+</style>
+</head>
+<body>
+<div id="msg">Loading 3D game...</div>
+<canvas id="game"></canvas>
+<div id="hud">🪙 COINS: <span id="score">0</span><br>WASD / ARROWS • SPACE = JUMP</div>
+<div id="brand">MADE BY ANAS ALI</div>
+<div id="controls">
+<button class="b" id="u">▲</button><button class="b" id="l">◀</button>
+<button class="b" id="d">▼</button><button class="b" id="r">▶</button>
+</div>
+<button id="jump">JUMP</button>
+
+<script src="https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js"></script>
+<script>
+(function(){
+const msg=document.getElementById('msg');
+if(!window.THREE){msg.innerHTML='3D engine could not load.<br>Please open this file while connected to the internet.';return;}
+msg.style.display='none';
+
+const canvas=document.getElementById('game');
+const renderer=new THREE.WebGLRenderer({canvas,antialias:true});
+renderer.setPixelRatio(Math.min(devicePixelRatio,1.5));
+renderer.setSize(innerWidth,innerHeight);
+renderer.shadowMap.enabled=true;
+const scene=new THREE.Scene();
+scene.background=new THREE.Color(0x79c8ff);
+scene.fog=new THREE.Fog(0x79c8ff,55,150);
+const camera=new THREE.PerspectiveCamera(60,innerWidth/innerHeight,.1,300);
+
+scene.add(new THREE.HemisphereLight(0xbde7ff,0x31552e,2));
+const sun=new THREE.DirectionalLight(0xffffff,2.4);
+sun.position.set(40,70,30);sun.castShadow=true;scene.add(sun);
+
+function cube(w,h,d,c,x,y,z){
+ const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),new THREE.MeshStandardMaterial({color:c}));
+ m.position.set(x,y,z);m.castShadow=true;m.receiveShadow=true;scene.add(m);return m;
+}
+cube(180,.3,180,0x3d984d,0,-.15,0);
+
+// Roads and sidewalks
+for(let i=-60;i<=60;i+=20){
+ cube(12,.08,180,0x30343b,i,.04,0);
+ cube(180,.08,12,0x30343b,0,.05,i);
+ cube(2,.1,180,0xd4c56c,i-7,.1,0);
+ cube(2,.1,180,0xd4c56c,i+7,.1,0);
+ cube(180,.1,2,0xd4c56c,0,.1,i-7);
+ cube(180,.1,2,0xd4c56c,0,.1,i+7);
+}
+
+// buildings
+const cols=[0x4169a1,0x8e5b79,0xb66b3c,0x477b72,0x665d88,0x777777];
+for(let x=-50;x<=50;x+=20)for(let z=-50;z<=50;z+=20){
+ if(Math.abs(x)<20||Math.abs(z)<20)continue;
+ let h=7+Math.random()*13;
+ cube(13,h,13,cols[(Math.random()*cols.length)|0],x,h/2,z);
+ for(let y=2;y<h;y+=3){
+   cube(1.8,1,.12,0x9eeaff,x-3,y,z-6.56);
+   cube(1.8,1,.12,0x9eeaff,x+2,y,z-6.56);
+ }
+}
+
+// trees
+function tree(x,z){
+ const trunk=cube(1,3,1,0x75452a,x,1.5,z);
+ const crown=new THREE.Mesh(new THREE.SphereGeometry(2.3,12,10),new THREE.MeshStandardMaterial({color:0x247a38}));
+ crown.position.set(x,4,z);crown.castShadow=true;scene.add(crown);
+}
+[[-17,-17],[17,-17],[-17,17],[17,17],[-37,17],[37,-17],[-37,-17],[37,17]].forEach(p=>tree(p[0],p[1]));
+
+// player
+const player=new THREE.Group();
+const body=new THREE.Mesh(new THREE.CapsuleGeometry(.48,1.0,6,12),new THREE.MeshStandardMaterial({color:0x2374d8}));
+body.position.y=1.15;body.castShadow=true;player.add(body);
+const head=new THREE.Mesh(new THREE.SphereGeometry(.43,16,12),new THREE.MeshStandardMaterial({color:0xf0b27a}));
+head.position.y=2.05;head.castShadow=true;player.add(head);
+player.position.set(0,0,0);scene.add(player);
+
+// coins
+let score=0;const coins=[];
+[[-10,-10],[10,-10],[-10,10],[10,10],[-30,0],[30,0],[0,-30],[0,30],[-30,-30],[30,30],[-30,30],[30,-30]].forEach(p=>{
+ const c=new THREE.Mesh(new THREE.TorusGeometry(.55,.17,12,24),new THREE.MeshStandardMaterial({color:0xffd21f,emissive:0x6a4b00}));
+ c.position.set(p[0],1.3,p[1]);c.rotation.x=Math.PI/2;c.castShadow=true;scene.add(c);coins.push(c);
+});
+
+// input
+const keys={};addEventListener('keydown',e=>{keys[e.key.toLowerCase()]=true});addEventListener('keyup',e=>{keys[e.key.toLowerCase()]=false});
+const t={up:false,down:false,left:false,right:false};
+function bind(id,k){let e=document.getElementById(id);['pointerdown','touchstart'].forEach(v=>e.addEventListener(v,()=>t[k]=true,{passive:true}));['pointerup','pointercancel','touchend'].forEach(v=>e.addEventListener(v,()=>t[k]=false,{passive:true}));}
+bind('u','up');bind('d','down');bind('l','left');bind('r','right');
+document.getElementById('jump').addEventListener('pointerdown',()=>{if(player.position.y<.1)vy=7});
+
+let vy=0,camYaw=0;
+const clock=new THREE.Clock();
+function resize(){renderer.setSize(innerWidth,innerHeight);camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix()}
+addEventListener('resize',resize);
+
+function loop(){
+ requestAnimationFrame(loop);
+ let dt=Math.min(clock.getDelta(),.05);
+ let mx=(keys.d||keys.arrowright||t.right?1:0)-(keys.a||keys.arrowleft||t.left?1:0);
+ let mz=(keys.s||keys.arrowdown||t.down?1:0)-(keys.w||keys.arrowup||t.up?1:0);
+ let len=Math.hypot(mx,mz);
+ if(len){mx/=len;mz/=len;player.position.x+=mx*8*dt;player.position.z+=mz*8*dt;player.rotation.y=Math.atan2(mx,mz)}
+ player.position.x=THREE.MathUtils.clamp(player.position.x,-82,82);
+ player.position.z=THREE.MathUtils.clamp(player.position.z,-82,82);
+ vy-=18*dt;player.position.y+=vy*dt;
+ if(player.position.y<0){player.position.y=0;vy=0}
+ coins.forEach(c=>{
+  if(!c.visible)return;
+  c.rotation.z+=dt*4;c.position.y=1.3+Math.sin(performance.now()/250+c.position.x)*.15;
+  if(player.position.distanceTo(c.position)<1.6){c.visible=false;score++;document.getElementById('score').textContent=score}
+ });
+ const target=new THREE.Vector3(player.position.x,5.5,player.position.z+8);
+ camera.position.lerp(target,.12);camera.lookAt(player.position.x,1.2,player.position.z);
+ renderer.render(scene,camera);
+}
+loop();
+})();
+</script>
+</body>
+</html>
